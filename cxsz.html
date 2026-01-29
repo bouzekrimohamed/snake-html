@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Snake — Laurent & Mohamed</title>
+  <style>
+    :root{
+      --bg:#0b0f14; --card:#111826; --line:#223044; --text:#e7eef4; --muted:#9aa7b2;
+      --btn:#1f6feb; --btn2:#2b3242;
+    }
+    *{ box-sizing:border-box; }
+    body{
+      margin:0; font-family:system-ui, Segoe UI, Arial, sans-serif;
+      background:radial-gradient(1000px 600px at 30% 10%, #15233a 0%, var(--bg) 55%);
+      color:var(--text);
+      min-height:100vh;
+      display:flex; align-items:center; justify-content:center;
+      padding:18px;
+    }
+    .wrap{ width:min(980px, 100%); display:grid; gap:16px; grid-template-columns: 1fr; }
+    @media (min-width: 860px){ .wrap{ grid-template-columns: 420px 1fr; } }
+    .card{
+      background:rgba(17,24,38,.9);
+      border:1px solid var(--line);
+      border-radius:16px;
+      padding:16px;
+      box-shadow: 0 14px 34px rgba(0,0,0,.35);
+      backdrop-filter: blur(6px);
+    }
+    h1{ margin:0 0 6px 0; font-size:22px; letter-spacing:.2px; }
+    .sub{ color:var(--muted); font-size:13px; margin-bottom:14px; line-height:1.35; }
+    .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    button{
+      border:1px solid var(--line);
+      background:var(--btn);
+      color:white; font-weight:700;
+      padding:10px 12px;
+      border-radius:12px;
+      cursor:pointer;
+      transition: transform .08s ease, filter .08s ease;
+      user-select:none;
+    }
+    button:active{ transform: translateY(1px); filter:brightness(.95); }
+    button.secondary{ background:var(--btn2); font-weight:650; }
+    .pill{
+      display:inline-flex; gap:8px; align-items:center;
+      padding:8px 10px; border:1px solid var(--line);
+      border-radius:999px; color:var(--muted); font-size:13px;
+    }
+    .kpi{
+      display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:12px;
+    }
+    .kpi .box{
+      border:1px solid var(--line); border-radius:14px; padding:12px;
+      background:rgba(11,15,20,.45);
+    }
+    .kpi .label{ color:var(--muted); font-size:12px; }
+    .kpi .value{ font-size:20px; font-weight:800; margin-top:4px; }
+    .msg{
+      margin-top:12px;
+      border:1px dashed #2b3a55;
+      background:rgba(11,15,20,.35);
+      border-radius:14px;
+      padding:12px;
+      color:var(--muted);
+      min-height:54px;
+      line-height:1.35;
+    }
+    .game{
+      display:flex; flex-direction:column; gap:12px; align-items:center;
+    }
+    canvas{
+      width:min(560px, 100%);
+      aspect-ratio: 1/1;
+      border:1px solid var(--line);
+      border-radius:16px;
+      background:linear-gradient(180deg, rgba(9,12,18,.9), rgba(6,9,13,.95));
+      box-shadow: 0 18px 40px rgba(0,0,0,.35);
+    }
+    .hint{ color:var(--muted); font-size:13px; text-align:center; }
+    .footer{ color:var(--muted); font-size:12px; text-align:center; margin-top:6px; }
+    .badge{
+      display:inline-flex; align-items:center; gap:8px;
+      padding:8px 10px; border-radius:999px;
+      border:1px solid var(--line); background:rgba(11,15,20,.4);
+      font-size:13px; color:var(--muted);
+    }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>🐍 Snake — “Laurent & Mohamed”</h1>
+      <div class="sub">
+         <b>Laurent</b> est le snake 🐍, et <b>Mohamed</b> est le boss 😄 qui veut que tu récupères un max de “missions”.
+        <br>➡️ 
+      </div>
+
+      <div class="row">
+        <button id="btnStart">Commencer à jouer</button>
+        <button id="btnRestart" class="secondary" disabled>Recommencer</button>
+        <span class="pill">Vitesse: <b id="speedTxt">Normal</b></span>
+        <button id="btnSpeed" class="secondary">Changer vitesse</button>
+      </div>
+
+      <div class="kpi">
+        <div class="box">
+          <div class="label">Score (missions validées)</div>
+          <div class="value" id="score">0</div>
+        </div>
+        <div class="box">
+          <div class="label">Record</div>
+          <div class="value" id="best">0</div>
+        </div>
+      </div>
+
+      <div class="msg" id="msg">
+        Appuie sur <b>Commencer à jouer</b>. Mohamed te regarde. Laurent doit assurer. 😄
+      </div>
+
+      <div style="margin-top:12px" class="badge">
+      </div>
+    </div>
+
+    <div class="card game">
+      <canvas id="cv" width="560" height="560"></canvas>
+      <div class="hint">
+        Contrôles : <b>Flèches</b> / <b>WASD</b> — <b>Espace</b> pause — <b>R</b> restart
+      </div>
+      <div class="footer">Astuce : plus tu manges, plus Laurent s’allonge… et plus Mohamed exige. 😈</div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  // ======= Config =======
+  const GRID = 22;               // cases par côté
+  const CANVAS = document.getElementById("cv");
+  const ctx = CANVAS.getContext("2d");
+
+  const scoreEl = document.getElementById("score");
+  const bestEl  = document.getElementById("best");
+  const msgEl   = document.getElementById("msg");
+
+  const btnStart   = document.getElementById("btnStart");
+  const btnRestart = document.getElementById("btnRestart");
+  const btnSpeed   = document.getElementById("btnSpeed");
+  const speedTxt   = document.getElementById("speedTxt");
+
+  const cell = CANVAS.width / GRID;
+
+  const SPEEDS = [
+    { name: "Tranquille", ms: 160 },
+    { name: "Normal",    ms: 120 },
+    { name: "Rapide",    ms: 90  },
+    { name: "Furieux",   ms: 70  },
+  ];
+  let speedIndex = 1;
+
+  // ======= State =======
+  let snake, dir, nextDir, food, score, best, timer, running, paused, lastTick;
+  best = Number(localStorage.getItem("LM_SNAKE_BEST") || "0");
+  bestEl.textContent = String(best);
+
+  function rndCell() {
+    return { x: (Math.random()*GRID)|0, y: (Math.random()*GRID)|0 };
+  }
+
+  function same(a,b){ return a.x===b.x && a.y===b.y; }
+
+  function placeFood() {
+    let f;
+    do { f = rndCell(); }
+    while (snake.some(s => same(s, f)));
+    food = f;
+  }
+
+  function resetGame() {
+    snake = [
+      {x: (GRID/2)|0, y: (GRID/2)|0},
+      {x: ((GRID/2)|0)-1, y: (GRID/2)|0},
+      {x: ((GRID/2)|0)-2, y: (GRID/2)|0},
+    ];
+    dir = {x:1,y:0};
+    nextDir = {x:1,y:0};
+    score = 0;
+    paused = false;
+    running = false;
+    scoreEl.textContent = "0";
+    placeFood();
+    draw();
+  }
+
+  function setMessage(text){ msgEl.innerHTML = text; }
+
+  function setSpeedLabel(){ speedTxt.textContent = SPEEDS[speedIndex].name; }
+  setSpeedLabel();
+
+  function start() {
+    if (running) return;
+    running = true;
+    paused = false;
+    btnRestart.disabled = false;
+    btnStart.disabled = true;
+    setMessage("🎬 <b>Go!</b> Mohamed: « Laurent, on veut des résultats. » 😄");
+    lastTick = performance.now();
+    tickLoop();
+  }
+
+  function stop() {
+    running = false;
+    btnStart.disabled = false;
+  }
+
+  function gameOver() {
+    stop();
+    btnRestart.disabled = false;
+    setMessage("💥 <b>Game Over.</b> Mohamed: « Laurent… on en reparle. » 😭 (Appuie sur Recommencer)");
+  }
+
+  function updateBest() {
+    if (score > best) {
+      best = score;
+      localStorage.setItem("LM_SNAKE_BEST", String(best));
+      bestEl.textContent = String(best);
+      setMessage("🏆 <b>Nouveau record!</b> Mohamed: « Ok Laurent… pas mal. » 😏");
+    }
+  }
+
+  function step() {
+    if (!running || paused) return;
+
+    dir = nextDir;
+
+    const head = snake[0];
+    const newHead = { x: head.x + dir.x, y: head.y + dir.y };
+
+    // murs = KO
+    if (newHead.x < 0 || newHead.y < 0 || newHead.x >= GRID || newHead.y >= GRID) {
+      updateBest();
+      return gameOver();
+    }
+
+    // collision avec soi-même
+    if (snake.some(s => same(s, newHead))) {
+      updateBest();
+      return gameOver();
+    }
+
+    snake.unshift(newHead);
+
+    // manger
+    if (same(newHead, food)) {
+      score++;
+      scoreEl.textContent = String(score);
+      placeFood();
+
+      // petites punchlines
+      const lines = [
+        "✅ Mission validée. Mohamed: « Continue! »",
+        "🍽️ Laurent a mangé. Mohamed: « Plus vite! »",
+        "📈 Mohamed: « Voilà. Ça, j’aime. »",
+        "😈 Mohamed: « On lâche rien. »",
+        "🧠 Laurent: « Facile. » Mohamed: « On verra. »",
+      ];
+      setMessage(lines[score % lines.length]);
+    } else {
+      snake.pop();
+    }
+
+    draw();
+  }
+
+  function draw() {
+    // fond
+    ctx.clearRect(0,0,CANVAS.width,CANVAS.height);
+
+    // grille légère
+    ctx.globalAlpha = 0.25;
+    ctx.lineWidth = 1;
+    for (let i=0;i<=GRID;i++){
+      ctx.beginPath(); ctx.moveTo(i*cell,0); ctx.lineTo(i*cell,CANVAS.height); ctx.strokeStyle = "#223044"; ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0,i*cell); ctx.lineTo(CANVAS.width,i*cell); ctx.strokeStyle = "#223044"; ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    // nourriture = "Mission" (M)
+    ctx.fillStyle = "#1f6feb";
+    roundRect(food.x*cell+3, food.y*cell+3, cell-6, cell-6, 10, true);
+    ctx.fillStyle = "#ffffff";
+    ctx.font = `700 ${Math.max(12, cell*0.55)}px system-ui, Segoe UI, Arial`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("M", food.x*cell + cell/2, food.y*cell + cell/2);
+
+    // snake = Laurent (L sur la tête)
+    snake.forEach((p, idx) => {
+      const pad = idx === 0 ? 2 : 3;
+      ctx.fillStyle = idx === 0 ? "#e7eef4" : "#9aa7b2";
+      roundRect(p.x*cell+pad, p.y*cell+pad, cell-2*pad, cell-2*pad, 12, true);
+
+      if (idx === 0) {
+        ctx.fillStyle = "#0b0f14";
+        ctx.font = `900 ${Math.max(12, cell*0.55)}px system-ui, Segoe UI, Arial`;
+        ctx.fillText("L", p.x*cell + cell/2, p.y*cell + cell/2);
+      }
+    });
+
+    // overlay pause
+    if (paused) {
+      ctx.fillStyle = "rgba(0,0,0,.45)";
+      ctx.fillRect(0,0,CANVAS.width,CANVAS.height);
+      ctx.fillStyle = "#e7eef4";
+      ctx.font = "900 32px system-ui, Segoe UI, Arial";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("PAUSE", CANVAS.width/2, CANVAS.height/2 - 10);
+      ctx.font = "600 14px system-ui, Segoe UI, Arial";
+      ctx.fillStyle = "#9aa7b2";
+      ctx.fillText("Espace pour reprendre", CANVAS.width/2, CANVAS.height/2 + 18);
+    }
+  }
+
+  function roundRect(x,y,w,h,r,fill){
+    const rr = Math.min(r, w/2, h/2);
+    ctx.beginPath();
+    ctx.moveTo(x+rr, y);
+    ctx.arcTo(x+w, y, x+w, y+h, rr);
+    ctx.arcTo(x+w, y+h, x, y+h, rr);
+    ctx.arcTo(x, y+h, x, y, rr);
+    ctx.arcTo(x, y, x+w, y, rr);
+    ctx.closePath();
+    if (fill) ctx.fill();
+  }
+
+  function canChangeTo(dx,dy){
+    // empêche demi-tour immédiat
+    return !(dir.x === -dx && dir.y === -dy);
+  }
+
+  // ======= Input =======
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+
+    if (k === " "){
+      if (!running) return;
+      paused = !paused;
+      setMessage(paused ? "⏸️ Pause. Mohamed: « Tu souffles déjà ? » 😄" : "▶️ Reprise. Mohamed: « Voilà. »");
+      draw();
+      e.preventDefault();
+      return;
+    }
+    if (k === "r"){
+      resetGame();
+      start();
+      return;
+    }
+
+    // directions
+    let nd = null;
+    if (k === "arrowup" || k === "w") nd = {x:0,y:-1};
+    if (k === "arrowdown" || k === "s") nd = {x:0,y:1};
+    if (k === "arrowleft" || k === "a") nd = {x:-1,y:0};
+    if (k === "arrowright" || k === "d") nd = {x:1,y:0};
+
+    if (nd && canChangeTo(nd.x, nd.y)) {
+      nextDir = nd;
+      e.preventDefault();
+    }
+  });
+
+  // ======= Buttons =======
+  btnStart.addEventListener("click", () => start());
+  btnRestart.addEventListener("click", () => { resetGame(); start(); });
+  btnSpeed.addEventListener("click", () => {
+    speedIndex = (speedIndex + 1) % SPEEDS.length;
+    setSpeedLabel();
+    setMessage(`⚙️ Vitesse: <b>${SPEEDS[speedIndex].name}</b>. Mohamed: « On ajuste, mais on avance. »`);
+  });
+
+  // ======= Game loop =======
+  function tickLoop(now) {
+    if (!running) return;
+
+    const ms = SPEEDS[speedIndex].ms;
+    const t = performance.now();
+    if (t - lastTick >= ms) {
+      lastTick = t;
+      step();
+    }
+    requestAnimationFrame(tickLoop);
+  }
+
+  // init
+  resetGame();
+})();
+</script>
+</body>
+</html>
